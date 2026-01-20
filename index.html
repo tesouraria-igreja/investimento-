@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investimentos - Mordomia Financeira</title>
+
+<style>
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; padding: 20px; min-height: 100vh; }
+.container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+header { text-align: center; padding: 30px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+header h1 { margin: 0; font-size: 2em; }
+main { padding: 30px; }
+.numeric { text-align: right; }
+.profit-positive { color: #28a745; font-weight: 600; }
+.profit-negative { color: #dc3545; font-weight: 600; }
+.btn { padding: 10px 20px; cursor: pointer; }
+</style>
+</head>
+
+<body>
+<div class="container">
+<header>
+<h1>📊 Planilha de Investimentos</h1>
+<p>Mordomia Financeira para a Glória de Deus</p>
+</header>
+
+<main>
+
+<form onsubmit="addInvestment(event)">
+<input id="ativo" placeholder="Ativo" required>
+<input id="quantidade" type="number" step="0.00000001" placeholder="Quantidade" required>
+<input id="precoCompra" type="number" step="0.00000001" placeholder="Preço Compra" required>
+<input id="precoAtual" type="number" step="0.00000001" placeholder="Preço Atual" required>
+<input id="dataCompra" type="date" required>
+<button class="btn">Adicionar</button>
+</form>
+
+<table border="1" width="100%" style="margin-top:20px">
+<thead>
+<tr>
+<th>Ativo</th>
+<th class="numeric">Qtd</th>
+<th class="numeric">Compra</th>
+<th class="numeric">Atual</th>
+<th class="numeric">Total</th>
+<th class="numeric">Lucro</th>
+<th class="numeric">%</th>
+<th>Data</th>
+<th>Ação</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+
+<h3>Total Investido: <span id="totalInvestido">R$ 0,00</span></h3>
+<h3>Valor Atual: <span id="valorAtual">R$ 0,00</span></h3>
+<h3>Lucro/Prejuízo: <span id="totalLucro">R$ 0,00</span></h3>
+
+</main>
+</div>
+
+<script>
+function formatCurrency(v) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(v);
+}
+function formatNumber(v) {
+  return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(v);
+}
+function formatPercent(v) {
+  return v.toFixed(2).replace('.', ',') + '%';
+}
+function parseValue(text) {
+  if (!text) return 0;
+  let cleanText = text.toString().trim().replace(/R\$/g, '').replace(/\s/g, '');
+  cleanText = cleanText.replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleanText) || 0;
+}
+function createRow(data) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td contenteditable>${data.ativo || ''}</td>
+    <td contenteditable class="numeric" data-value="${data.qtd || 0}">${formatNumber(data.qtd || 0)}</td>
+    <td contenteditable class="numeric" data-value="${data.buy || 0}">${formatNumber(data.buy || 0)}</td>
+    <td contenteditable class="numeric" data-value="${data.cur || 0}">${formatNumber(data.cur || 0)}</td>
+    <td class="numeric"></td>
+    <td class="numeric"></td>
+    <td class="numeric"></td>
+    <td contenteditable>${data.data || ''}</td>
+    <td><button onclick="this.closest('tr').remove(); calculateTotals(); saveToStorage();">❌</button></td>
+  `;
+  tr.querySelectorAll('[contenteditable].numeric').forEach(td => {
+    td.addEventListener('blur', () => {
+      const v = parseValue(td.innerText);
+      td.dataset.value = v;
+      td.innerText = formatNumber(v);
+      calculateRow(tr);
+      calculateTotals();
+      saveToStorage();
+    });
+    td.addEventListener('focus', () => {
+      td.innerText = td.dataset.value.toString().replace('.', ',');
+    });
+  });
+  tr.querySelector('td[contenteditable]:not(.numeric)').addEventListener('blur', () => {
+    saveToStorage();
+  });
+  document.getElementById('tableBody').appendChild(tr);
+  calculateRow(tr);
+  return tr;
+}
+function calculateRow(tr) {
+  const q = parseFloat(tr.cells[1].dataset.value || 0);
+  const b = parseFloat(tr.cells[2].dataset.value || 0);
+  const c = parseFloat(tr.cells[3].dataset.value || 0);
+  const invest = q * b;
+  const atual = q * c;
+  const lucro = atual - invest;
+  const perc = invest > 0 ? (lucro / invest) * 100 : 0;
+  tr.cells[4].innerText = formatCurrency(atual);
+  tr.cells[5].innerText = formatCurrency(lucro);
+  tr.cells[5].className = 'numeric ' + (lucro >= 0 ? 'profit-positive' : 'profit-negative');
+  tr.cells[6].innerText = formatPercent(perc);
+  tr.cells[6].className = 'numeric ' + (lucro >= 0 ? 'profit-positive' : 'profit-negative');
+}
+function calculateTotals() {
+  let ti = 0, va = 0;
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    const q = +tr.cells[1].dataset.value || 0;
+    const b = +tr.cells[2].dataset.value || 0;
+    const c = +tr.cells[3].dataset.value || 0;
+    ti += q * b;
+    va += q * c;
+  });
+  const lucroTotal = va - ti;
+  document.getElementById('totalInvestido').innerText = formatCurrency(ti);
+  document.getElementById('valorAtual').innerText = formatCurrency(va);
+  document.getElementById('totalLucro').innerText = formatCurrency(lucroTotal);
+  document.getElementById('totalLucro').className = lucroTotal >= 0 ? 'profit-positive' : 'profit-negative';
+}
+function addInvestment(e) {
+  e.preventDefault();
+  createRow({
+    ativo: ativo.value,
+    qtd: +quantidade.value,
+    buy: +precoCompra.value,
+    cur: +precoAtual.value,
+    data: dataCompra.value
+  });
+  e.target.reset();
+  calculateTotals();
+  saveToStorage();
+}
+function saveToStorage() {
+  const data = [];
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    data.push({
+      ativo: tr.cells[0].innerText,
+      qtd: tr.cells[1].dataset.value,
+      buy: tr.cells[2].dataset.value,
+      cur: tr.cells[3].dataset.value,
+      data: tr.cells[7].innerText
+    });
+  });
+  localStorage.setItem('investments', JSON.stringify(data));
+}
+function loadFromStorage() {
+  const saved = localStorage.getItem('investments');
+  if (saved) {
+    const data = JSON.parse(saved);
+    data.forEach(item => createRow(item));
+    calculateTotals();
+  }
+}
+
+// Carregar dados ao iniciar
+loadFromStorage();
+</script>
+
+</body>
+</html>
